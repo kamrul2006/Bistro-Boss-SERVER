@@ -31,6 +31,13 @@ async function run() {
         // ----------------collection------------------
         const menuCollection = client.db("Boss-DB").collection('boss-menu')
         const reviewCollection = client.db("Boss-DB").collection('boss-reviews')
+        const cartCollection = client.db("Boss-DB").collection('boss-carts')
+
+
+
+        // ----------------------------------------------------------------------------------------
+        //------menu---------
+        // ----------------------------------------------------------------------------------------
 
 
         // ---------------get all menu----------------
@@ -44,15 +51,39 @@ async function run() {
 
 
         // ----------------------------------------------------------------------------------------
+        //------reviews---------
         // ----------------------------------------------------------------------------------------
 
         // -----------get all reviews---------------------------------
         app.get("/reviews", async (req, res) => {
-
             const result = await reviewCollection.find().toArray();
-
             res.send(result)
         })
+
+
+
+
+        // ----------------------------------------------------------------------------------------
+        //------CARTS---------
+        // ----------------------------------------------------------------------------------------
+
+        // -----------get all Cart items---------------------------------
+        app.get("/carts", async (req, res) => {
+            const result = await cartCollection.find().toArray();
+            res.send(result)
+        })
+
+        //----------add to cart--------
+        app.post('/carts', async (req, res) => {
+            const cartItem = req.body
+            const result = await cartCollection.insertOne(cartItem)
+            res.send(result)
+        })
+
+
+
+
+
 
         // Send a ping to confirm a successful connection
         await client.db("admin").command({ ping: 1 });
