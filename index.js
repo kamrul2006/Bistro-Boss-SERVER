@@ -32,6 +32,7 @@ async function run() {
         const menuCollection = client.db("Boss-DB").collection('boss-menu')
         const reviewCollection = client.db("Boss-DB").collection('boss-reviews')
         const cartCollection = client.db("Boss-DB").collection('boss-carts')
+        const UserCollection = client.db("Boss-DB").collection('boss-users')
 
 
 
@@ -51,6 +52,33 @@ async function run() {
 
 
         // ----------------------------------------------------------------------------------------
+        //------Users---------
+        // ----------------------------------------------------------------------------------------
+
+        // -----------get all reviews---------------------------------
+        app.get("/users", async (req, res) => {
+            const result = await UserCollection.find().toArray();
+            res.send(result)
+        })
+
+        //----------add users--------
+        app.post('/users', async (req, res) => {
+            const user = req.body
+            const query = { email: user.email }
+            const exist = await UserCollection.findOne(query)
+
+            if (exist) {
+                return res.send({ massage: 'User Already exist', insertedId: null })
+            }
+
+            const result = await UserCollection.insertOne(user)
+            res.send(result)
+        })
+
+
+
+
+        // ----------------------------------------------------------------------------------------
         //------reviews---------
         // ----------------------------------------------------------------------------------------
 
@@ -59,6 +87,7 @@ async function run() {
             const result = await reviewCollection.find().toArray();
             res.send(result)
         })
+
 
 
 
@@ -92,8 +121,8 @@ async function run() {
             res.send(result)
         })
 
-           // ----------------------delete cart item by id -----------------------------
-           app.delete("/carts/:id", async (req, res) => {
+        // ----------------------delete cart item by id -----------------------------
+        app.delete("/carts/:id", async (req, res) => {
             const id = req.params.id
             // console.log(email)
             const query = { _id: new ObjectId(id) }
