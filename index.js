@@ -35,7 +35,7 @@ const tokenVerify = (req, res, next) => {
         }
 
         // Attach decoded data to the request object
-        req.user = decoded;
+        req.decoded = decoded;
 
         // Proceed to the next middleware or route handler
         next();
@@ -63,20 +63,20 @@ async function run() {
         const cartCollection = client.db("Boss-DB").collection('boss-carts')
         const UserCollection = client.db("Boss-DB").collection('boss-users')
 
-        // ---auth related Apis-------------------------------
 
+        // ---auth related Apis-------------------------------
         app.post('/jwt', async (req, res) => {
             try {
                 const user = req.body;
-        
+
                 // Validate user data
                 if (!user || !user.email) {
                     return res.status(400).send({ success: false, message: "Invalid user data" });
                 }
-        
+
                 // Create the JWT token
                 const token = jwt.sign(user, process.env.JWT_SECRET, { expiresIn: '1h' });
-        
+
                 // Set the JWT token as an HTTP-only cookie
                 res
                     .cookie('token', token, {
@@ -90,8 +90,8 @@ async function run() {
                 res.status(500).send({ success: false, message: "Internal server error" });
             }
         });
-        
 
+        // --------------removing token on log out------
         app.post('/logout', (req, res) => {
             res.clearCookie('token', {
                 httpOnly: true,
@@ -170,6 +170,26 @@ async function run() {
             res.send(result)
         })
 
+        // -----------check the user is admin or not----------------------
+        app.get('/users/admin/:email', tokenVerify, async (req, res) => {
+
+            const email = req.params.email;
+
+            // console.log('email', req.decoded.email)
+            if (email !== req?.decoded?.email) {
+                return res.status(403).send({ massage: 'unauthorized access' })
+            }
+            else {
+                const query = { email: email }
+                const user = await UserCollection.findOne(query);
+                let admin = false;
+
+                if (user) {
+                    admin = user?.role == "admin"
+                }
+                res.send({ admin })
+            }
+        })
 
         // ----------------------------------------------------------------------------------------
         //------reviews---------
