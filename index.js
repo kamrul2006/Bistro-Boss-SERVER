@@ -126,6 +126,12 @@ async function run() {
             res.send(result)
         })
 
+        //----------add Menu  (admin only)--------
+        app.post('/menus', tokenVerify, adminVerify, async (req, res) => {
+            const menuItem = req.body
+            const result = await menuCollection.insertOne(menuItem)
+            res.send(result)
+        })
 
         // ----------------------------------------------------------------------------------------
         //------Users---------
