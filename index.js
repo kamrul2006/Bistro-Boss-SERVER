@@ -15,33 +15,6 @@ app.use(cors({
 app.use(express.json())
 app.use(cookieParser());
 
-// _______________token verify------------
-const tokenVerify = (req, res, next) => {
-    // Retrieve token from cookies or Authorization header
-    const token = req?.cookies?.token || req.headers.authorization?.split(" ")[1];
-
-    // console.log("Inside the tokenVerify middleware:", token);
-
-    // If no token is found, return 401 Unauthorized
-    if (!token) {
-        return res.status(401).send({ message: "Unauthorized access" });
-    }
-
-    // Verify the token
-    jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
-        if (err) {
-            // console.error("JWT Verification Error:", err.message);
-            return res.status(403).send({ message: "Forbidden: Invalid or Expired Token" });
-        }
-
-        // Attach decoded data to the request object
-        req.decoded = decoded;
-
-        // Proceed to the next middleware or route handler
-        next();
-    });
-};
-
 
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.8jqou.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
@@ -100,6 +73,46 @@ async function run() {
             }).send({ tokenRemoved: true })
         })
 
+        // _______________token verify------------
+        const tokenVerify = (req, res, next) => {
+            // Retrieve token from cookies or Authorization header
+            const token = req?.cookies?.token || req.headers.authorization?.split(" ")[1];
+
+            // console.log("Inside the tokenVerify middleware:", token);
+
+            // If no token is found, return 401 Unauthorized
+            if (!token) {
+                return res.status(401).send({ message: "Unauthorized access" });
+            }
+
+            // Verify the token
+            jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
+                if (err) {
+                    // console.error("JWT Verification Error:", err.message);
+                    return res.status(403).send({ message: "Forbidden: Invalid or Expired Token" });
+                }
+
+                // Attach decoded data to the request object
+                req.decoded = decoded;
+
+                // Proceed to the next middleware or route handler
+                next();
+            });
+        };
+
+        //____________________admin verify---------
+        const adminVerify = async (req, res, next) => {
+            const email = req.decoded.email
+            const query = { email: email }
+            const user = await UserCollection.findOne(query);
+            const isAdmin = user?.role == 'admin';
+
+            if (!isAdmin) {
+                return res.status(403).send({ massage: 'unauthorized access' })
+            }
+            next()
+        }
+
 
         // ----------------------------------------------------------------------------------------
         //------menu---------
@@ -119,7 +132,7 @@ async function run() {
         // ----------------------------------------------------------------------------------------
 
         // -----------get all user---------------------------------
-        app.get("/users", tokenVerify, async (req, res) => {
+        app.get("/users", tokenVerify, adminVerify, async (req, res) => {
             const result = await UserCollection.find().toArray();
             res.send(result)
         })
@@ -139,7 +152,7 @@ async function run() {
         })
 
         // ----------------------get user by id -----------------------------
-        app.get("/users/:id", async (req, res) => {
+        app.get("/users/:id", tokenVerify, adminVerify, async (req, res) => {
             const id = req.params.id
             const query = { _id: new ObjectId(id) }
             const result = await UserCollection.find(query).toArray();
@@ -148,7 +161,7 @@ async function run() {
 
 
         // ----------------------patch user by id to make admin -----------------------------
-        app.patch("/users/:id", async (req, res) => {
+        app.patch("/users/:id", tokenVerify, adminVerify, async (req, res) => {
             const id = req.params.id
             const query = { _id: new ObjectId(id) }
             const updatedDoc = {
@@ -162,7 +175,7 @@ async function run() {
         })
 
         // ----------------------delete user by id -----------------------------
-        app.delete("/users/:id", async (req, res) => {
+        app.delete("/users/:id", tokenVerify, adminVerify, async (req, res) => {
             const id = req.params.id
             // console.log(email)
             const query = { _id: new ObjectId(id) }
@@ -240,14 +253,10 @@ async function run() {
             res.send(result)
         })
 
-
-
-
-
-
         await client.db("admin").command({ ping: 1 });
         console.log("Pinged your deployment. You successfully connected to MongoDB!");
-    } finally {
+    }
+    finally {
     }
 }
 run().catch(console.dir);
@@ -257,7 +266,5 @@ run().catch(console.dir);
 app.get('/', (req, res) => {
     res.send('Boos is eating!')
 })
-
-
 
 app.listen(port)
