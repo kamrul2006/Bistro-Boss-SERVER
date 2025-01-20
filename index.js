@@ -133,6 +133,15 @@ async function run() {
             res.send(result)
         })
 
+        // ----------------------delete menu item by id -----------------------------
+        app.delete("/menus/:id", tokenVerify, adminVerify, async (req, res) => {
+            const id = req.params.id
+            // console.log(email)
+            const query = { _id: new ObjectId(id) }
+            const result = await menuCollection.deleteOne(query);
+            res.send(result)
+        })
+
         // ----------------------------------------------------------------------------------------
         //------Users---------
         // ----------------------------------------------------------------------------------------
