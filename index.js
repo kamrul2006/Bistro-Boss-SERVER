@@ -126,6 +126,15 @@ async function run() {
             res.send(result)
         })
 
+        // ----------------------get cart item by id -----------------------------
+        app.get("/menus/:id", async (req, res) => {
+            const id = req.params.id
+            const query = { _id: new ObjectId(id) }
+
+            const result = await menuCollection.findOne(query)
+            res.send(result)
+        })
+
         //----------add Menu  (admin only)--------
         app.post('/menus', tokenVerify, adminVerify, async (req, res) => {
             const menuItem = req.body
@@ -140,6 +149,26 @@ async function run() {
             const query = { _id: new ObjectId(id) }
             const result = await menuCollection.deleteOne(query);
             res.send(result)
+        })
+
+        //----------------update menu item---------------
+        app.patch("/menus/:id", async (req, res) => {
+            const item = req.body
+            // console.log(item)
+            const id = req.params.id
+            const filter = { _id: new ObjectId(id) }
+            const updatedDoc = {
+                $set: {
+                    name: item.name,
+                    category: item.category,
+                    price: item.price,
+                    recipe: item.recipe
+                }
+            }
+
+            const result = await menuCollection.updateOne(filter, updatedDoc)
+            res.send(result)
+
         })
 
         // ----------------------------------------------------------------------------------------
