@@ -10,7 +10,13 @@ const app = express();
 
 // -----------middleware-----
 app.use(cors({
-    origin: ['http://localhost:5173'],
+    origin: ['http://localhost:5173',
+        'https://bistro-boss-5216b.web.app',
+        'https://bistro-boss-5216b.firebaseapp.com',
+        'https://bistro-boss-5216b.web.app'
+    ],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], // Include OPTIONS method
+    allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true
 }))
 app.use(express.json())
@@ -36,6 +42,7 @@ async function run() {
         const reviewCollection = client.db("Boss-DB").collection('boss-reviews')
         const cartCollection = client.db("Boss-DB").collection('boss-carts')
         const UserCollection = client.db("Boss-DB").collection('boss-users')
+        const payCollection = client.db("Boss-DB").collection('boss-pay')
 
 
         // ---auth related Apis-------------------------------
@@ -48,17 +55,16 @@ async function run() {
                     return res.status(400).send({ success: false, message: "Invalid user data" });
                 }
 
-                // Create the JWT token
-                const token = jwt.sign(user, process.env.JWT_SECRET, { expiresIn: '1h' });
-
-                // Set the JWT token as an HTTP-only cookie
+                const token = jwt.sign(user, process.env.JWT_SECRET, { expiresIn: '10h' })
                 res
                     .cookie('token', token, {
-                        httpOnly: true, // Cookie not accessible via JavaScript
-                        secure: process.env.NODE_ENV === 'production', // HTTPS only in production
-                        sameSite: process.env.NODE_ENV === 'production' ? "none" : "strict", // Cross-site in production, strict otherwise
+                        httpOnly: true,
+                        // secure: false,
+                        secure: process.env.NODE_ENV === 'production',
+                        sameSite: process.env.NODE_ENV === 'production' ? "none" : "strict"
                     })
-                    .send({ success: true });
+                    // .send(token)
+                    .send({ success: true })
             } catch (error) {
                 console.error("JWT Error:", error.message);
                 res.status(500).send({ success: false, message: "Internal server error" });
@@ -69,11 +75,11 @@ async function run() {
         app.post('/logout', (req, res) => {
             res.clearCookie('token', {
                 httpOnly: true,
+                // secure: false,
                 secure: process.env.NODE_ENV === 'production',
                 sameSite: process.env.NODE_ENV === 'production' ? "none" : "strict"
             }).send({ tokenRemoved: true })
         })
-
         // _______________token verify------------
         const tokenVerify = (req, res, next) => {
             // Retrieve token from cookies or Authorization header
@@ -306,20 +312,124 @@ async function run() {
             const { price } = req.body
             const amount = parseInt(price * 100);
 
-            const paymentIntent = await stripe.paymentIntents.create({
-                amount: amount,
-                currency: 'usd',
-                payment_method_types: ['card']
-            })
+            if (amount > 50) {
+                const paymentIntent = await stripe.paymentIntents.create({
+                    amount: amount,
+                    currency: 'usd',
+                    payment_method_types: ['card']
+                })
 
-            res.send({
-                clientSecret: paymentIntent.client_secret
-            })
+                res.send({
+                    clientSecret: paymentIntent.client_secret
+                })
+            }
 
         })
 
+        //----------add to payment History--------
+        app.post('/payments', async (req, res) => {
+            const payment = req.body
+            const result = await payCollection.insertOne(payment)
+
+            //-----------delete all items from the cart-------
+            const query = {
+                _id: {
+                    $in: payment.CartIds.map(id => new ObjectId(id))
+                }
+            }
+
+            const delResult = await cartCollection.deleteMany(query)
+            res.send(result)
+        })
+
+        // -----------get all payment items---------------------------------
+        app.get("/payments", async (req, res) => {
+            const email = req.query.email
+            // console.log(email)
+            const query = { email: email }
+            const result = await payCollection.find(query).toArray();
+            res.send(result)
+        })
+
+
+        //------------------------------
+        //----admin works----
+        //--------------------------------
+
+        app.get('/admin-works', tokenVerify, adminVerify, async (req, res) => {
+            const user = await UserCollection.estimatedDocumentCount();
+            const menuItem = await menuCollection.estimatedDocumentCount();
+            const order = await payCollection.estimatedDocumentCount();
+
+            //---------not the best way
+            // const payment = await payCollection.find().toArray();
+            // const revenue = payment.reduce((total, pay) =>
+            //     total + parseInt(pay.price), 0)
+
+            const payments = await payCollection.aggregate([
+                {
+                    $group: {
+                        _id: null,
+                        totalRevenue: {
+                            $sum: '$price'
+                        }
+                    }
+                }
+            ]).toArray()
+            // console.log(payments.length)
+            const revenueData = payments?.length > 0 ? payments[0].totalRevenue : 0;
+            // console.log(revenueData)
+
+            res.send({
+                user,
+                menuItem,
+                order,
+                // revenue,
+                revenueData
+            })
+        })
+
+
+        //--------for just write, not of any work
+        //-------for chart------------
+        app.get('/order-chart', async (req, res) => {
+            try {
+                const result = await payCollection.aggregate([
+                    {
+                        $unwind: '$CartIds'
+                    },
+                    {
+                        $lookup: {
+                            from: 'boss-menu',
+                            localField: 'CartIds',
+                            foreignField: '_id',
+                            as: 'menuItems'
+                        }
+                    },
+                    {
+                        $unwind: '$menuItems'
+                    },
+                    {
+                        $group: {
+                            _id: '$menuItems.category',
+                            quantity: { $sum: 1 },
+                            revenue: { $sum: '$menuItems.price' }
+                        }
+                    }
+                ]).toArray()
+
+                res.send(result)
+            }
+            catch (error) {
+                console.error('Error fetching order chart:', error);
+                res.status(500).send({ message: 'An error occurred while fetching the order chart' });
+            }
+        })
+
+
+
         await client.db("admin").command({ ping: 1 });
-        console.log("Pinged your deployment. You successfully connected to MongoDB!");
+        // console.log("Pinged your deployment. You successfully connected to MongoDB!");
     }
     finally {
     }
